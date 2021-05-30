@@ -1,4 +1,4 @@
-import {Component, h, Prop, State} from '@stencil/core';
+import {Component, h, Prop, State,Method,Element} from '@stencil/core';
 
 import {Pose, PoseBodyFrameModel, PoseLimb, PoseModel, PosePointModel, RGBColor} from "pose-utils";
 
@@ -19,25 +19,77 @@ export class PoseViewer {
    */
   @Prop() edit: boolean = false;
 
+  @Element() el :HTMLElement
+  @Prop({reflect:true,mutable:true}) paused: boolean = false
+  @Prop({reflect:true,mutable:true}) fps: number = 15
+  @Prop ({reflect:true,mutable:true}) playbackrate: number = 1.0
+  duration : number
+  video : HTMLVideoElement
+  @State() frame: PoseBodyFrameModel;
+  private loopInterval: any; 
   pose: PoseModel;
 
-  nextFrameId = 0;
-  @State() frame: PoseBodyFrameModel;
-  private loopInterval: any;
-
+  @Prop ({reflect:true,mutable:true}) nextFrameId = 0
   constructor() {
   }
+  setDuration(vidDuration:number){
+    this.duration = vidDuration
+  }
+  playPose(){
+    this.paused = false
+  }
+  pausePose(){
+    this.paused = true
+  }
+  updatePose(currTime :number,oldTime :number){
+    if (Math.abs(currTime - oldTime) > 1.5)  {  
+    this.nextFrameId=Math.round(currTime/this.duration*this.pose.body.frames.length)
+    }
+    // if(this.video.playbackRate!=this.playbackrate){
+    //   this.playbackrate =this.video.playbackRate
+    // }
+  }
+  seek(currTime :number){
+      this.nextFrameId=Math.round(currTime/this.duration*this.pose.body.frames.length)
+   
+  }
+  @Method()
+  async setVideo(video :any){
+    this.video = video
+    this.duration =this.video.duration
+    this.video.addEventListener('pause', () => {
+        this.pausePose();
+    });
+    this.video.addEventListener('play', () => {
+        this.playPose()
+    });
+      var time  = 0
+    this.video.addEventListener('timeupdate', () => {
+        var oldtime =time
+        time = this.video.currentTime
+        this.updatePose(time,oldtime)
+    });
+    this.video.addEventListener('seek', () => {
+        time = this.video.currentTime
+        this.seek(time)
+    });
+  }
+
+  @Method()
+  async changeplaybackRate(rate:number){
+    this.playbackrate = rate;
+  }
+
+
+
 
   async componentWillLoad() {
     this.pose = await Pose.fromRemote(this.src);
     console.log(this.pose);
-
-
     this.frame = this.pose.body.frames[this.nextFrameId];
-
     if (this.pose.body.frames.length > 1) {
       this.clearInterval();
-      this.loopInterval = setInterval(this.frameLoop.bind(this), 1000 / this.pose.body.fps)
+      this.loopInterval = setInterval(this.frameLoop.bind(this), (1000 / this.pose.body.fps)/this.playbackrate)
     } else {
       this.frameLoop();
     }
@@ -54,8 +106,11 @@ export class PoseViewer {
   }
 
   frameLoop() {
-    this.frame = this.pose.body.frames[this.nextFrameId];
-    this.nextFrameId = ((this.nextFrameId + 1) % this.pose.body.frames.length);
+    if(this.paused==false){
+      this.frame = this.pose.body.frames[this.nextFrameId];
+      this.nextFrameId = ((this.nextFrameId+1) % (this.pose.body.frames.length));
+    }
+    
   }
 
   isJointValid(joint: PosePointModel) {
@@ -96,7 +151,6 @@ export class PoseViewer {
         G: (c1.G + c2.G) / 2,
         B: (c1.B + c2.B) / 2,
       };
-
       return (<line
         x1={joints[from].X}
         y1={joints[from].Y}
@@ -130,6 +184,4 @@ export class PoseViewer {
       </svg>
     )
   }
-}
-
-
+} 

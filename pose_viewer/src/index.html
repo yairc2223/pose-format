@@ -9,7 +9,18 @@
   <script nomodule src="/build/pose-viewer.js"></script>
 </head>
 <body>
-<pose-viewer src="sample-data/video/sample.pose"></pose-viewer>
-<video src="sample-data/video/video.mp4" autoplay loop controls></video>
+  <pose-viewer src="sample-data/video/po.pose" playbackrate="1" ></pose-viewer>
+  <video id="vid" src="sample-data/video/11.webm" loop autoplay controls></video>
+<script>
+const poseviewer = document.querySelector('pose-viewer')
+const video = document.querySelector('video') 
+//poseviewer.setVideo(video) ///// not working
+video.addEventListener('play', (event) => {
+  poseviewer.setVideo(video)// working
+});
+
+</script>
+
+
 </body>
 </html>

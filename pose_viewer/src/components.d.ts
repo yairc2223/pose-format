@@ -7,10 +7,16 @@
 import { HTMLStencilElement, JSXBase } from "@stencil/core/internal";
 export namespace Components {
     interface PoseViewer {
+        "changeplaybackRate": (rate: number) => Promise<void>;
         /**
           * Allow editing the img
          */
         "edit": boolean;
+        "fps": number;
+        "nextFrameId": number;
+        "paused": boolean;
+        "playbackrate": number;
+        "setVideo": (video: any) => Promise<void>;
         /**
           * Pose Img Source
          */
@@ -34,6 +40,10 @@ declare namespace LocalJSX {
           * Allow editing the img
          */
         "edit"?: boolean;
+        "fps"?: number;
+        "nextFrameId"?: number;
+        "paused"?: boolean;
+        "playbackrate"?: number;
         /**
           * Pose Img Source
          */
