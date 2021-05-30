@@ -7,20 +7,11 @@
 import { HTMLStencilElement, JSXBase } from "@stencil/core/internal";
 export namespace Components {
     interface PoseViewer {
-        "changeplaybackRate": (rate: number) => Promise<void>;
-        /**
-          * Allow editing the img
-         */
-        "edit": boolean;
-        "fps": number;
-        "nextFrameId": number;
-        "paused": boolean;
-        "playbackrate": number;
-        "setVideo": (video: any) => Promise<void>;
-        /**
-          * Pose Img Source
-         */
+        "autoplay": boolean;
+        "loop": boolean;
+        "playbackRate": number;
         "src": string;
+        "syncMedia": (media: HTMLMediaElement) => Promise<void>;
     }
 }
 declare global {
@@ -36,17 +27,16 @@ declare global {
 }
 declare namespace LocalJSX {
     interface PoseViewer {
-        /**
-          * Allow editing the img
-         */
-        "edit"?: boolean;
-        "fps"?: number;
-        "nextFrameId"?: number;
-        "paused"?: boolean;
-        "playbackrate"?: number;
-        /**
-          * Pose Img Source
-         */
+        "autoplay"?: boolean;
+        "loop"?: boolean;
+        "onCanplaythrough$"?: (event: CustomEvent<void>) => void;
+        "onEnded$"?: (event: CustomEvent<void>) => void;
+        "onLoadeddata$"?: (event: CustomEvent<void>) => void;
+        "onLoadedmetadata$"?: (event: CustomEvent<void>) => void;
+        "onLoadstart$"?: (event: CustomEvent<void>) => void;
+        "onPause$"?: (event: CustomEvent<void>) => void;
+        "onPlay$"?: (event: CustomEvent<void>) => void;
+        "playbackRate"?: number;
         "src"?: string;
     }
     interface IntrinsicElements {

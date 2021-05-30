@@ -1,6 +1,6 @@
-import {Component, h, Prop, State,Method,Element} from '@stencil/core';
+import {Component, Event, EventEmitter, h, Method, Prop, State} from '@stencil/core';
 
-import {Pose, PoseBodyFrameModel, PoseLimb, PoseModel, PosePointModel, RGBColor} from "pose-utils";
+import {Pose, PoseLimb, PoseModel, PosePointModel, RGBColor} from "pose-utils";
 
 
 @Component({
@@ -9,90 +9,125 @@ import {Pose, PoseBodyFrameModel, PoseLimb, PoseModel, PosePointModel, RGBColor}
   shadow: true
 })
 export class PoseViewer {
-  /**
-   * Pose Img Source
-   */
-  @Prop() src: string;
+  @Prop() src: string; // Source URL for .pose file
 
-  /**
-   * Allow editing the img
-   */
-  @Prop() edit: boolean = false;
+  // MediaElement-like properties
+  @Prop({mutable: true}) loop: boolean = false;
+  @Prop() autoplay: boolean = true;
+  @Prop({mutable: true}) playbackRate: number = 1;
 
-  @Element() el :HTMLElement
-  @Prop({reflect:true,mutable:true}) paused: boolean = false
-  @Prop({reflect:true,mutable:true}) fps: number = 15
-  @Prop ({reflect:true,mutable:true}) playbackrate: number = 1.0
-  duration : number
-  video : HTMLVideoElement
-  @State() frame: PoseBodyFrameModel;
-  private loopInterval: any; 
+  @State() currentTime: number = NaN; // This affects re-rendering
+  duration: number = NaN;
+  ended: boolean = false;
+  paused: boolean = true;
+  readyState: number = 0;
+
+  // MediaElement-like events
+  @Event() canplaythrough$: EventEmitter<void>;
+  @Event() ended$: EventEmitter<void>;
+  @Event() loadeddata$: EventEmitter<void>;
+  @Event() loadedmetadata$: EventEmitter<void>;
+  @Event() loadstart$: EventEmitter<void>;
+  @Event() pause$: EventEmitter<void>;
+  @Event() play$: EventEmitter<void>;
+  // @Event() ratechange$: EventEmitter<void>;
+  // @Event() seeked$: EventEmitter<void>;
+  // @Event() seeking$: EventEmitter<void>;
+  // @Event() timeupdate$: EventEmitter<void>;
+
+
+  media: HTMLMediaElement;
   pose: PoseModel;
 
-  @Prop ({reflect:true,mutable:true}) nextFrameId = 0
-  constructor() {
-  }
-  setDuration(vidDuration:number){
-    this.duration = vidDuration
-  }
-  playPose(){
-    this.paused = false
-  }
-  pausePose(){
-    this.paused = true
-  }
-  updatePose(currTime :number,oldTime :number){
-    if (Math.abs(currTime - oldTime) > 1.5)  {  
-    this.nextFrameId=Math.round(currTime/this.duration*this.pose.body.frames.length)
-    }
-    // if(this.video.playbackRate!=this.playbackrate){
-    //   this.playbackrate =this.video.playbackRate
-    // }
-  }
-  seek(currTime :number){
-      this.nextFrameId=Math.round(currTime/this.duration*this.pose.body.frames.length)
-   
-  }
-  @Method()
-  async setVideo(video :any){
-    this.video = video
-    this.duration =this.video.duration
-    this.video.addEventListener('pause', () => {
-        this.pausePose();
-    });
-    this.video.addEventListener('play', () => {
-        this.playPose()
-    });
-      var time  = 0
-    this.video.addEventListener('timeupdate', () => {
-        var oldtime =time
-        time = this.video.currentTime
-        this.updatePose(time,oldtime)
-    });
-    this.video.addEventListener('seek', () => {
-        time = this.video.currentTime
-        this.seek(time)
-    });
-  }
-
-  @Method()
-  async changeplaybackRate(rate:number){
-    this.playbackrate = rate;
-  }
-
-
-
+  private loopInterval: any;
 
   async componentWillLoad() {
+    this.loadstart$.emit();
     this.pose = await Pose.fromRemote(this.src);
     console.log(this.pose);
-    this.frame = this.pose.body.frames[this.nextFrameId];
-    if (this.pose.body.frames.length > 1) {
-      this.clearInterval();
-      this.loopInterval = setInterval(this.frameLoop.bind(this), (1000 / this.pose.body.fps)/this.playbackrate)
-    } else {
-      this.frameLoop();
+    // Loaded done events
+    this.loadedmetadata$.emit();
+    this.loadeddata$.emit();
+    this.canplaythrough$.emit();
+
+    this.duration = (this.pose.body.frames.length - 1) / this.pose.body.fps;
+    this.currentTime = 0;
+
+    if (this.autoplay) {
+      this.play();
     }
+  }
+
+  @Method()
+  syncMedia(media: HTMLMediaElement) {
+    this.media = media;
+
+    this.media.addEventListener('pause', this.pause.bind(this));
+    this.media.addEventListener('play', this.play.bind(this));
+    const syncTime = () => this.currentTime = this.frameTime(this.media.currentTime);
+    this.media.addEventListener('seek', syncTime);
+    this.media.addEventListener('timeupdate', syncTime); // To always keep synced
+
+    // Others
+    const updateRate = () => this.playbackRate = this.media.playbackRate;
+    this.media.addEventListener('ratechange', updateRate);
+    updateRate();
+
+    // Start the pose according to the video
+    this.clearInterval();
+    if (this.media.paused) {
+      this.pause();
+    } else {
+      this.play();
+    }
+  }
+
+  frameTime(time: number) {
+    return Math.floor(time * this.pose.body.fps) / this.pose.body.fps;
+  }
+
+  play() {
+    if (!this.paused) {
+      this.clearInterval();
+    }
+
+    this.paused = false;
+    this.play$.emit();
+
+    // Reset clip if exceeded duration
+    if (this.currentTime > this.duration) {
+      this.currentTime = 0;
+    }
+
+    const intervalTime = 1000 / (this.pose.body.fps * this.playbackRate)
+    console.log("intervalTime", intervalTime)
+    if (this.media) {
+      this.loopInterval = setInterval(() => this.currentTime = this.frameTime(this.media.currentTime), intervalTime);
+    } else {
+      // Add the time passed in an interval.
+      let lastTime = Date.now() / 1000;
+      this.loopInterval = setInterval(() => {
+        const now = Date.now() / 1000;
+        this.currentTime += (now - lastTime) * this.playbackRate;
+        lastTime = now;
+        if (this.currentTime > this.duration) {
+          if (this.loop) {
+            this.currentTime = this.currentTime % this.duration;
+          } else {
+            this.ended$.emit();
+            this.ended = true;
+
+            this.clearInterval();
+          }
+        }
+      }, intervalTime);
+    }
+  }
+
+  pause() {
+    this.paused = true;
+    this.pause$.emit();
+    this.clearInterval();
   }
 
   clearInterval() {
@@ -105,13 +140,7 @@ export class PoseViewer {
     this.clearInterval();
   }
 
-  frameLoop() {
-    if(this.paused==false){
-      this.frame = this.pose.body.frames[this.nextFrameId];
-      this.nextFrameId = ((this.nextFrameId+1) % (this.pose.body.frames.length));
-    }
-    
-  }
+  // Render functions
 
   isJointValid(joint: PosePointModel) {
     return joint.C > 0;
@@ -151,6 +180,7 @@ export class PoseViewer {
         G: (c1.G + c2.G) / 2,
         B: (c1.B + c2.B) / 2,
       };
+
       return (<line
         x1={joints[from].X}
         y1={joints[from].Y}
@@ -166,14 +196,19 @@ export class PoseViewer {
 
 
   render() {
-    if (!this.frame) {
+    if (!this.pose || isNaN(this.currentTime)) {
       return "";
     }
+
+    const currentTime = this.currentTime > this.duration ? this.duration : this.currentTime;
+
+    const frameId = Math.floor(currentTime * this.pose.body.fps);
+    const frame = this.pose.body.frames[frameId];
 
     return (
       <svg xmlns="http://www.w3.org/2000/svg" width={this.pose.header.width} height={this.pose.header.height}>
         <g>
-          {this.frame.people.map(person => this.pose.header.components.map(component => {
+          {frame.people.map(person => this.pose.header.components.map(component => {
             const joints = person[component.name];
             return [
               this.renderLimbs(component.limbs, joints, component.colors),
@@ -184,4 +219,4 @@ export class PoseViewer {
       </svg>
     )
   }
-} 
+}

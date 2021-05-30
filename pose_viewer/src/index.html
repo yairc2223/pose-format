@@ -9,18 +9,19 @@
   <script nomodule src="/build/pose-viewer.js"></script>
 </head>
 <body>
-  <pose-viewer src="sample-data/video/po.pose" playbackrate="1" ></pose-viewer>
-  <video id="vid" src="sample-data/video/11.webm" loop autoplay controls></video>
+<pose-viewer src="sample-data/video/po.pose"></pose-viewer>
+<video src="sample-data/video/11.webm" autoplay loop controls></video>
+
 <script>
-const poseviewer = document.querySelector('pose-viewer')
-const video = document.querySelector('video') 
-//poseviewer.setVideo(video) ///// not working
-video.addEventListener('play', (event) => {
-  poseviewer.setVideo(video)// working
-});
+  (async () => {
+    await customElements.whenDefined('pose-viewer');
 
+    // the component is registered now, so its methods are immediately available
+    const poseViewer = document.querySelector('pose-viewer');
+    const video = document.querySelector('video');
+
+    poseViewer.syncMedia(video)
+  })();
 </script>
-
-
 </body>
 </html>
